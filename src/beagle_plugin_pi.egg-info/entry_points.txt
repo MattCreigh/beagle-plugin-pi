@@ -1,0 +1,2 @@
+[beagle.frontends]
+pi = beagle_plugin_pi

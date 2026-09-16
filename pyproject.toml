@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "beagle-plugin-pi"
+version = "1.0.0"
+description = "pi+beagle: the vendored pi coding-agent frontend as a discovered Beagle plugin"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "src/beagle_plugin_pi/vendor/UPSTREAM.txt" }
+# HC-5: the plugin declares NO Beagle runtime dependencies. The host
+# environment (beagle, typer) provides them.
+
+[project.entry-points."beagle.frontends"]
+pi = "beagle_plugin_pi"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+beagle_plugin_pi = ["vendor/**/*"]

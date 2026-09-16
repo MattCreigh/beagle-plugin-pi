@@ -1,0 +1,16 @@
+Metadata-Version: 2.4
+Name: beagle-plugin-pi
+Version: 1.0.0
+Summary: pi+beagle: the vendored pi coding-agent frontend as a discovered Beagle plugin
+License: upstream: https://github.com/earendil-works/pi
+        fork:     https://github.com/MattCreigh/pi
+        tag:      v0.84.3
+        commit:   4e58f324fae8ebfa98a3d45181fb248072a2afac
+        vendored: 2026-08-28
+        license:  MIT (vendor/pi/LICENSE)
+        deps:     381 npm packages pinned in vendor/pi/package-lock.json (141 prod / 224 dev / 16 optional)
+        licenses: SPDX breakdown + OR-expression elections in vendor/license-inventory.json
+        resync:   procedure in src/beagle/frontends/pi/README.md
+        
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
