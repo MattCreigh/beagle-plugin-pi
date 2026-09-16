@@ -1,2 +1,2 @@
 [beagle.frontends]
-pi = beagle_plugin_pi
+pi = beagle_plugin_pi.cli

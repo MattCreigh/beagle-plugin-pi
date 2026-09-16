@@ -13,7 +13,7 @@ license = { file = "src/beagle_plugin_pi/vendor/UPSTREAM.txt" }
 # environment (beagle, typer) provides them.
 
 [project.entry-points."beagle.frontends"]
-pi = "beagle_plugin_pi"
+pi = "beagle_plugin_pi.cli"
 
 [tool.setuptools.packages.find]
 where = ["src"]
