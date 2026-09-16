@@ -18,10 +18,11 @@ src/beagle/frontends/pi/
     ├── UPSTREAM.txt                # exact upstream ref that was vendored
     ├── license-inventory.json      # generated third-party license manifest
     ├── pi-mcp-extension/           # MIT pi<->MCP bridge (v1.5.0)
-    │   └── src/                    #   entrypoint: src/index.ts
+    │   ├── src/                    #   entrypoint: src/index.ts
+    │   └── node_modules/           #   its runtime deps (must be its own)
     ├── pi-prebuild/                # published @earendil-works/pi-coding-agent
     │   ├── dist/bundle/cli.js      #   the runnable `pi` CLI (shipped in wheel)
-    │   └── node_modules/           #   SDK/zod/jiti deps for the MCP bridge
+    │   └── node_modules/           #   the pi CLI's own runtime deps
     └── pi/                         # pristine upstream source checkout
 ```
 
@@ -30,9 +31,9 @@ src/beagle/frontends/pi/
 npm package at the same `0.84.3` version, with the prebuilt `dist/` included.
 `vendor/pi-mcp-extension/` is the published
 [`pi-mcp-extension`](https://www.npmjs.com/package/pi-mcp-extension) (MIT) that
-bridges pi to MCP servers; its runtime deps
-(`@modelcontextprotocol/sdk`, `zod`, `jiti`) live under
-`pi-prebuild/node_modules/`.
+bridges pi to MCP servers; its runtime deps (`@modelcontextprotocol/sdk`,
+`zod`, `jiti`) are vendored under its own
+`pi-mcp-extension/node_modules/` — see below for why they cannot live elsewhere.
 `vendor/pi/` is a **verbatim** checkout of a fork commit (see `vendor/UPSTREAM.txt`
 for the repo, tag, and SHA) retained for provenance and re-sync.
 
@@ -54,6 +55,35 @@ Bare `beagle` (no subcommand) launches the `pi` frontend.
 
 Requires Node.js >= 20 on `PATH` at runtime. `vendor/pi/` (the source checkout)
 stays repo-only; building it requires `npm ci` + `npm run build`.
+
+### Why the MCP bridge's deps are vendored beside it
+
+Node resolves a bare specifier by walking *parent* directories from the importing
+file. A package's dependencies therefore must be under that package's own
+`node_modules/`, or an ancestor's — never a *sibling's*. `pi-prebuild/node_modules/`
+is a sibling of `pi-mcp-extension/`, so it is invisible to it.
+
+This was a live defect (found 2026-09-16): the tree shipped `pi-mcp-extension/`
+with no `node_modules/`, so loading it failed with `Cannot find module 'zod'`,
+and because `pi` aborts the process on a failed `--extension` load, **every bare
+`beagle` invocation exited 1**. Two fixes, both required:
+
+1. `vendor/pi-mcp-extension/node_modules/` must be installed and committed:
+   ```bash
+   cd src/beagle_plugin_pi/vendor/pi-mcp-extension
+   npm install --omit=dev --omit=peer --legacy-peer-deps --ignore-scripts
+   ```
+   `--omit=peer` matters: the extension's `peerDependencies` name the pi packages,
+   which the bundle already provides; installing them adds ~220 MB of duplicate
+   tree for nothing. `--omit=dev` and `--ignore-scripts` follow the policy above.
+   This yields ~26 MB, tracked in git alongside the other vendored trees.
+2. `launcher.py` must pass `--extension <path>` as two tokens. The vendored
+   bundle's argument parser consumes two tokens for `--extension`/`-e` and
+   rejects the `--extension=<path>` form as an unknown option.
+
+`tests/test_pi_plugin.py` asserts both (the flag form via a stubbed `execvpe`,
+and dep resolvability via `_extension_is_loadable`), so a re-sync that drops
+either one fails the suite rather than shipping a broken entry point.
 
 ## Working with the vendored tree
 

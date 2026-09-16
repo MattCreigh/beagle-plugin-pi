@@ -1,0 +1,15 @@
+# Build inputs, not sources.
+#
+# The pi-mcp-extension bridge is installed at build time and its node_modules
+# is several thousand files belonging to OTHER packages (zod, et al). It is a
+# build input of the wheel's package-data, not content this repo authors, so it
+# is not committed: committing it would put a foreign dependency tree under our
+# diff, and every upstream bump would land as thousands of unrelated lines.
+#
+# Same reasoning for the generated lockfile: it records a resolution, and the
+# resolution is already pinned by package.json plus the vendored tree.
+src/beagle_plugin_pi/vendor/pi-mcp-extension/node_modules/
+src/beagle_plugin_pi/vendor/pi-mcp-extension/package-lock.json
+
+# Per-checkout pi state (MCP server registrations), written by the launcher.
+.pi/

@@ -15,10 +15,10 @@ from __future__ import annotations
 import json
 import logging
 import os
+from pathlib import Path
 import shutil
 import sys
-from pathlib import Path
-from typing import NoReturn
+from typing import Any, NoReturn
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,45 @@ def _extension_path() -> Path:
     return ext
 
 
+def _extension_is_loadable(ext: Path) -> bool:
+    """Report whether the vendored MCP-bridge extension can actually be loaded.
+
+    Kept as a build-time assertion helper: the extension declares runtime
+    dependencies (``zod``, ``@modelcontextprotocol/sdk``, ``jiti``) that must be
+    installed beside it under ``vendor/pi-mcp-extension/node_modules/``. They
+    are NOT hoisted into a sibling tree — Node only walks *parent* directories,
+    so a sibling's ``node_modules`` is invisible to this extension.
+
+    The launcher does not call this on the hot path (an unloadable extension is
+    a packaging defect to fix, not a thing to silently skip); it exists so a
+    test can assert the vendored tree is complete after a resync.
+    """
+    package_json = ext.parent.parent / "package.json"
+    try:
+        declared = json.loads(package_json.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        logger.debug("pi MCP bridge manifest unreadable (%s)", exc)
+        return False
+
+    deps = [d for d in (declared.get("dependencies") or {}) if not d.startswith("@types/")]
+    if not deps:
+        return True
+
+    for dep in deps:
+        directory = ext.parent.parent
+        found = False
+        for _ in range(6):
+            if (directory / "node_modules" / dep).is_dir():
+                found = True
+                break
+            if directory.parent == directory:
+                break
+            directory = directory.parent
+        if not found:
+            return False
+    return True
+
+
 def _write_mcp_config(project_dir: Path) -> Path:
     """Write (or refresh) a default ``.pi/mcp.json`` wiring Beagle's MCP server.
 
@@ -59,7 +98,7 @@ def _write_mcp_config(project_dir: Path) -> Path:
     cfg_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = cfg_dir / "mcp.json"
 
-    cfg: dict = {"settings": {}, "mcpServers": {}}
+    cfg: dict[str, Any] = {"settings": {}, "mcpServers": {}}
     if cfg_path.is_file():
         try:
             cfg = json.loads(cfg_path.read_text())
@@ -164,8 +203,14 @@ def run(argv: list[str] | None = None) -> NoReturn:
         ext = _extension_path()
         _write_mcp_config(Path.cwd())
         # Preload the MCP extension so no manual `pi install` is required.
+        #
+        # The flag MUST be the two-token ``--extension <path>`` form. The
+        # vendored bundle consumes two tokens and rejects the ``=`` form
+        # outright as an unknown option (args.ts: the ``--extension`` branch
+        # requires ``i + 1 < args.length``), so ``--extension=<path>`` aborts
+        # ``beagle`` before pi ever starts.
         if not any(a == "--extension" or a.startswith("-e") for a in argv):
-            argv = [f"--extension={ext}"] + argv
+            argv = ["--extension", str(ext), *argv]
     except FileNotFoundError as exc:
         # The bridge is best-effort; the frontend still opens without it.
         logger.warning("pi MCP bridge unavailable: %s", exc)
@@ -174,7 +219,9 @@ def run(argv: list[str] | None = None) -> NoReturn:
     # Replace the Python process so terminal key handling is not mediated by
     # typer/subprocess buffering. This also keeps ``pi``'s TUI in control of
     # stdin/stdout. execvpe does not return on success.
-    os.execvpe(node, [node, str(bundle), *argv], {**os.environ, "PI_BEAGLE_BUNDLE": str(bundle)})
+    os.execvpe(  # noqa: S606
+        node, [node, str(bundle), *argv], {**os.environ, "PI_BEAGLE_BUNDLE": str(bundle)}
+    )
     raise SystemExit(1)  # defensive: only reached if exec fails
 
 
@@ -183,7 +230,7 @@ def main() -> int:
     try:
         run()
     except (FileNotFoundError, RuntimeError) as exc:
-        print(f"beagle: {exc}", file=sys.stderr)
+        print(f"beagle: {exc}", file=sys.stderr)  # noqa: T201
         return 1
     raise SystemExit(0)  # unreachable on success — run() replaces the process
 
