@@ -13,3 +13,4 @@ src/beagle_plugin_pi/vendor/pi-mcp-extension/package-lock.json
 
 # Per-checkout pi state (MCP server registrations), written by the launcher.
 .pi/
+build/
